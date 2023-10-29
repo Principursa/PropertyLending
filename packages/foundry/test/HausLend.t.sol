@@ -56,17 +56,7 @@ contract HausLendTest is Test {
         //propose offer
         startHoax(alice);
         weth.approve(address(HausLend),100 ether);
-        LoanProtocol.LoanOffer memory offer = LoanProtocol.LoanOffer({
-            interestRate: 10, 
-            duration: 2682000, 
-            lender: alice, 
-            nftID: 0, 
-            amountMaximum: 100 ether,
-            currency: weth,
-            minimumHealthFactor: 75,
-            contractId: 0,
-            valid: true});
-        HausLend.proposeLoan(offer);
+        HausLend.proposeLoan(10,75,2682000,0,100 ether,weth,0);
 
     }
     function acceptLoan() private {
@@ -113,14 +103,14 @@ contract HausLendTest is Test {
         HausLend.liquidate(0);
         assertEq(propertyNFT.ownerOf(0) ,lender);
     }
-/*     function test_healthyLoanDoesNotLiquidate() public {
+     function test_healthyLoanDoesNotLiquidate() public {
         acceptLoan();
         startHoax(carlos);
         (,,,address borrower,,,,,,,) = HausLend.loanOnNft(0);
         HausLend.liquidate(0);
-        assertEq(propertyNFT.ownerOf(0) ,borrower);
+        assertEq(propertyNFT.ownerOf(0) ,address(HausLend));
     }
- */
+
     function test_extendDuration() public {
         acceptLoan();
         startHoax(alice);

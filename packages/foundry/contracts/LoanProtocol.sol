@@ -127,14 +127,34 @@ contract LoanProtocol is Ownable(msg.sender) {
         emit PropertySubmission(collateralId, msg.sender);
     }
 
-    function proposeLoan(LoanOffer calldata terms) external isNotPaused {
-        require(terms.interestRate <= 100);
-        require(terms.minimumHealthFactor <= 100);
-        require(msg.sender == terms.lender);
-        openLoans[listedOffers] = terms;
+    function proposeLoan(
+        uint interestRate,
+        uint minimumHealthFactor,
+        uint duration,
+        uint nftId,
+        uint amountMaximum,
+        IERC20 currency,
+        uint256 contractID
+    ) external isNotPaused {
+        require(interestRate <= 100);
+        require(minimumHealthFactor <= 100);
+        LoanOffer memory offer = LoanOffer({
+            interestRate: interestRate,
+            duration: duration,
+            lender: msg.sender,
+            nftID: nftId,
+            amountMaximum: amountMaximum,
+            currency: currency,
+            minimumHealthFactor: minimumHealthFactor,
+            contractId: contractID,
+            valid: true
+        });
+
+       
+        openLoans[listedOffers] = offer;
         listedOffers++;
-        IERC20 asset = terms.currency;
-        asset.transferFrom(terms.lender, address(this), terms.amountMaximum);
+        IERC20 asset = currency;
+        asset.transferFrom(msg.sender, address(this), amountMaximum);
         emit LoanProposed(listedOffers - 1, msg.sender);
     }
 
@@ -175,7 +195,7 @@ contract LoanProtocol is Ownable(msg.sender) {
             return true;
         }
         if (
-            healthLogic(healthFactor, assetVaulation, collateralPrice) == false
+            !healthLogic(healthFactor, assetVaulation, collateralPrice )
         ) {
             //handle health factor stuff
             _liqLogic(listId);
@@ -189,9 +209,8 @@ contract LoanProtocol is Ownable(msg.sender) {
         uint assetVaulation,
         uint collateralPrice
     ) public returns (bool) {
-        uint minimumCollateral = (assetVaulation * healthFactor) / 100;
-        console.log(minimumCollateral, "MINIMUM COLLATERAL");
-        if (minimumCollateral >= collateralPrice) {
+        uint minimumCollateral = (assetVaulation * healthFactor) / 100 / 1e18;
+        if (minimumCollateral >= collateralPrice * 1e18) {
             return false;
         }
         return true;
