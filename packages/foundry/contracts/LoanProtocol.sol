@@ -12,6 +12,7 @@ contract LoanProtocol is Ownable(msg.sender){
     //implement weth for all eth interactions
     //Add fee mechanisms, possibly both for liquidators and protocol
     //Add permit feature to stop spam and false properties
+    //@TODO: work on the zeroes logic 
 
     //@ERRORS
 
@@ -25,11 +26,16 @@ contract LoanProtocol is Ownable(msg.sender){
     event LoanPaid();
     event Paused();
     event Unpaused();
+    event TimeIncreased();
+    event LoanAmountDecreased();
 
     bool public isPaused = true;
     uint public listedProperties = 1;
     uint public listedOffers;
     IERC721 public propertyNFTContract;
+    address public priceOracle;
+    address public propertyOracle;
+
     enum LoanStatus {
         ONGOING, LIQUIDATED,PAID
         
@@ -53,12 +59,12 @@ contract LoanProtocol is Ownable(msg.sender){
         uint interestRate;
         uint duration;
         address lender;
-        uint nftID;
+        uint nftID; //id of the nft on the loan contract
         uint amountMaximum;
         IERC20 currency;
         bool avaliable;
         uint minimumHealthFactor;
-        uint contractId;
+        uint contractId; //id of the nft on the nft contract
         bool valid;
 
     }
@@ -68,67 +74,107 @@ contract LoanProtocol is Ownable(msg.sender){
     mapping (uint=>uint) properties;
     address public escrowAddress;
 
-    constructor(address _escrow) {
+    constructor(address _escrow, address _priceOracle, address _propertyOracle) {
         escrowAddress = _escrow;
+
+        //TODO: switch the address types for oracles to the proper interface
+        priceOracle = _priceOracle;
+        propertyOracle = _propertyOracle;
 
     }
 
-    function submitNFT(uint collateralId) external {
+    modifier isNotPaused() {
+        require(isPaused == false);
+        _;
+    }
+
+    function submitNFT(uint collateralId) external isNotPaused {
         require(msg.sender == propertyNFTContract.ownerOf(collateralId));
         properties[listedProperties] = collateralId;
         listedProperties++;
 
     }
-    function proposeLoan(LoanOffer calldata terms) external {
+    function proposeLoan(LoanOffer calldata terms) external isNotPaused{
+        require(terms.interestRate <= 100);
         openLoans[listedOffers] = terms;
         listedOffers++;
+        IERC20 asset = terms.currency;
+        asset.transferFrom(terms.lender,address(this),terms.amountMaximum);
+
         //@TODO: send erc20 to escrow address
 
 
     }
-    function acceptLoanOffer(uint collateralId, uint offerId, uint amount) external {
-        uint _contractId = openLoans[offerId].contractId;
+
+    function revokeProposedLoan(uint offerId) external{
+        LoanOffer storage offer = openLoans[offerId];
+        require(offer.valid == true);
+        offer.valid == false;
+        offer.currency.transferFrom(address(this),offer.lender,offer.amountMaximum);
+
+    }
+    function acceptLoanOffer(uint collateralId, uint offerId, uint amount) external isNotPaused {
+        LoanOffer storage offer = openLoans[offerId];
+        uint _contractId = offer.contractId;
+        require(offer.valid == true);
         require(msg.sender == propertyNFTContract.ownerOf(_contractId));
-        require(amount <= openLoans[offerId].amountMaximum);
+        require(amount <= offer.amountMaximum);
         uint listId = openLoans[offerId].nftID;
         _initiateLoan(offerId,amount);
         //@TODO: transfer nft ownership to escrow
 
     }
 
-    function callPriceOracle(IERC20 asset) public returns(uint){
+    function callPriceOracle(IERC20 asset) public view returns(uint){
         return 1000;//placeholder, replace with chainink mock aggregator
 
     }
-    function callHouseDataOracle() public returns(uint){
+    function callHouseDataOracle() public view returns(uint){
         return 1000000;//placeholder
 
     }
 
-    function _initiateLoan(uint offerId,uint amount) internal {
+    function _initiateLoan(uint offerId,uint amount) internal isNotPaused{
         LoanOffer storage offer = openLoans[offerId]; 
-        require(offer.valid == true);
         LoanTerms memory newTerm;
+
         newTerm.start = block.timestamp;
         newTerm.amount = amount;
+        newTerm.interestRate = offer.interestRate;
+        newTerm.duration = offer.duration;
+        newTerm.lender = offer.lender;
+        newTerm.borrower = propertyNFTContract.ownerOf(offer.contractId);
+        newTerm.minimumHealthFactor = offer.minimumHealthFactor;
+        newTerm.contractId = offer.contractId;
+        newTerm.currency = offer.currency;
+        newTerm.status = LoanStatus.ONGOING;
+        newTerm.nftID = offer.nftID;
+
+
         loanOnNft[openLoans[offerId].nftID] = newTerm;
         openLoans[offerId].valid = false;
 
+        offer.currency.transferFrom(address(this),newTerm.borrower,amount);
+        uint256 amountLeftOver = offer.amountMaximum - newTerm.amount;
+        if (amountLeftOver > 0) {
+            offer.currency.transferFrom(address(this),offer.lender,amountLeftOver);
+        }
     }
 
-    function liquidate(uint listId) external returns(bool){
-        IERC20 asset = loanOnNft[listId].currency;
-        uint256 endDate = loanOnNft[listId].start + loanOnNft[listId].duration;
+    function liquidate(uint listId) external isNotPaused returns(bool) {
+        LoanTerms storage terms = loanOnNft[listId];
+        IERC20 asset = terms.currency;
+        uint256 endDate = terms.start + terms.duration;
         uint assetPrice = callPriceOracle(asset);
         uint collateralPrice = callHouseDataOracle();
-        uint assetVaulation = assetPrice * loanOnNft[listId].amount;
-        uint healthFactor = loanOnNft[listId].minimumHealthFactor;
+        uint assetVaulation = assetPrice * terms.amount;
+        uint healthFactor = terms.minimumHealthFactor;
         if(block.timestamp > endDate){
-            _liqLogic();
+            _liqLogic(listId);
             return true;
         }
-        if(healthLogic() == true){ //handle health factor stuff
-            _liqLogic();
+        if(healthLogic(healthFactor, assetVaulation,collateralPrice) == false){ //handle health factor stuff
+            _liqLogic(listId);
             return true;
         }
         return false;
@@ -136,31 +182,54 @@ contract LoanProtocol is Ownable(msg.sender){
 
     }
 
-    function healthLogic() public returns(bool){
+    function healthLogic(uint healthFactor, uint assetVaulation,uint collateralPrice) public returns(bool){
+        uint minimumCollateral = assetVaulation * healthFactor / 100;
+        if (minimumCollateral >= collateralPrice){
+            return false;
+        }
+        return true;
 
     }
-    function _liqLogic() internal {
+    function _liqLogic(uint listId) internal isNotPaused {
+        LoanTerms storage terms = loanOnNft[listId];
+        //propertyNFTContract.approve(terms.lender,terms.nftID);
+        propertyNFTContract.transferFrom(address(this),terms.lender,terms.nftID);
 
     }
-    function extendDuration() external {
+    function extendDuration(uint listId,uint timeAmt) external isNotPaused {
+        require(msg.sender == loanOnNft[listId].lender);
+        require(timeAmt > 0);
+        require(loanOnNft[listId].status == LoanStatus.ONGOING);
+        loanOnNft[listId].duration += timeAmt;
 
     }
-    function repayLoan(uint listId,uint inputAmount) external {
+    function repayLoan(uint listId,uint inputAmount) external isNotPaused {
         require(inputAmount > 0);
         LoanTerms storage term = loanOnNft[listId];
         require(loanOnNft[listId].status == LoanStatus.ONGOING);
         uint interest = term.interestRate;
-        uint termAmount = term.amount;
+        uint principal = term.amount;
+        uint intRawAmt = principal * interest / 100; //@TODO: look into division exploit here
+        uint amtPlusInterest = intRawAmt + principal;
+        if (inputAmount >= amtPlusInterest) {
+            term.status = LoanStatus.PAID;
+            term.currency.transferFrom(term.borrower,term.lender,amtPlusInterest);
+            propertyNFTContract.transferFrom(address(this),term.borrower,term.contractId);
+
+        }
+        if (inputAmount < amtPlusInterest) {
+            term.amount -= inputAmount;
+            term.currency.transferFrom(term.borrower,term.lender,inputAmount);
+
+        }
 
 
     }
     function pause() external onlyOwner{
         isPaused = true;
-
     }
     function unpause() external onlyOwner{
         isPaused = false;
-
     }
 
 
