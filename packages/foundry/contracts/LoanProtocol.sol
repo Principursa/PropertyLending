@@ -7,6 +7,8 @@ import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "openzeppelin-contracts/contracts/token/ERC721/ERC721.sol"; 
 import "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol"; 
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol"; 
+import "./IPropertyOracle.sol";
+import "./MockPriceOracle/AggregatorV2V3Interface.sol";
 
 contract LoanProtocol is Ownable(msg.sender){
     //implement weth for all eth interactions
@@ -30,11 +32,10 @@ contract LoanProtocol is Ownable(msg.sender){
     event LoanAmountDecreased();
 
     bool public isPaused = true;
-    uint public listedProperties = 1;
+    uint public listedProperties;
     uint public listedOffers;
     IERC721 public propertyNFTContract;
-    address public priceOracle;
-    address public propertyOracle;
+    IPropertyOracle public propertyOracle;
 
     enum LoanStatus {
         ONGOING, LIQUIDATED,PAID
@@ -62,30 +63,34 @@ contract LoanProtocol is Ownable(msg.sender){
         uint nftID; //id of the nft on the loan contract
         uint amountMaximum;
         IERC20 currency;
-        bool avaliable;
         uint minimumHealthFactor;
         uint contractId; //id of the nft on the nft contract
         bool valid;
 
     }
     //TODO: implement signature mechanisms
-    mapping (uint => LoanOffer) openLoans;
+    mapping (uint => LoanOffer) public openLoans;
     mapping (uint => LoanTerms) loanOnNft;
+    mapping (IERC20 => AggregatorV2V3Interface) oracles;
     mapping (uint=>uint) properties;
     address public escrowAddress;
 
-    constructor(address _escrow, address _priceOracle, address _propertyOracle) {
+    constructor(address _escrow, IPropertyOracle _propertyOracle,IERC721 _propertyNFTContract) {
         escrowAddress = _escrow;
-
-        //TODO: switch the address types for oracles to the proper interface
-        priceOracle = _priceOracle;
         propertyOracle = _propertyOracle;
+        propertyNFTContract = _propertyNFTContract;
+
 
     }
 
     modifier isNotPaused() {
         require(isPaused == false);
         _;
+    }
+
+    function updateOracles(IERC20 asset, AggregatorV2V3Interface oracle) external onlyOwner{
+        oracles[asset] =  oracle;
+
     }
 
     function submitNFT(uint collateralId) external isNotPaused {
@@ -96,6 +101,8 @@ contract LoanProtocol is Ownable(msg.sender){
     }
     function proposeLoan(LoanOffer calldata terms) external isNotPaused{
         require(terms.interestRate <= 100);
+        require(terms.minimumHealthFactor <= 100);
+        require(msg.sender == terms.lender);
         openLoans[listedOffers] = terms;
         listedOffers++;
         IERC20 asset = terms.currency;
@@ -106,11 +113,11 @@ contract LoanProtocol is Ownable(msg.sender){
 
     }
 
-    function revokeProposedLoan(uint offerId) external{
+    function revokeLoan(uint offerId) external{
         LoanOffer storage offer = openLoans[offerId];
         require(offer.valid == true);
-        offer.valid == false;
-        offer.currency.transferFrom(address(this),offer.lender,offer.amountMaximum);
+        offer.currency.transfer(offer.lender,offer.amountMaximum);
+        offer.valid = false;
 
     }
     function acceptLoanOffer(uint collateralId, uint offerId, uint amount) external isNotPaused {
@@ -125,14 +132,6 @@ contract LoanProtocol is Ownable(msg.sender){
 
     }
 
-    function callPriceOracle(IERC20 asset) public view returns(uint){
-        return 1000;//placeholder, replace with chainink mock aggregator
-
-    }
-    function callHouseDataOracle() public view returns(uint){
-        return 1000000;//placeholder
-
-    }
 
     function _initiateLoan(uint offerId,uint amount) internal isNotPaused{
         LoanOffer storage offer = openLoans[offerId]; 
@@ -165,8 +164,9 @@ contract LoanProtocol is Ownable(msg.sender){
         LoanTerms storage terms = loanOnNft[listId];
         IERC20 asset = terms.currency;
         uint256 endDate = terms.start + terms.duration;
-        uint assetPrice = callPriceOracle(asset);
-        uint collateralPrice = callHouseDataOracle();
+        (,int price,,,)  = oracles[asset].latestRoundData();
+        uint assetPrice = uint(price);
+        uint collateralPrice = propertyOracle.getPropertyPrice(terms.contractId);
         uint assetVaulation = assetPrice * terms.amount;
         uint healthFactor = terms.minimumHealthFactor;
         if(block.timestamp > endDate){
