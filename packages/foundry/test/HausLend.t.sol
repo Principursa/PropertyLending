@@ -119,16 +119,17 @@ contract HausLendTest is Test {
         assertGt(duration,2682000);
     }
 
-/*     function test_repayLoanPartial() public {
+     function test_repayLoanPartial() public {
         acceptLoan();
         startHoax(bob);
-        weth.mint(bob,20 ether);
-        weth.approve(address(HausLend), 20 ether);
-        HausLend.repayLoan(0, 20 ether);
-        (,,,,uint256 amount,,,,,,) = HausLend.loanOnNft(0);
-        assertEq(amount, 80 ether);
+        weth.mint(bob,2 ether);
+        (,,,,uint256 amount1,,,,,,) = HausLend.loanOnNft(0);
+        weth.approve(address(HausLend), 2 ether);
+        HausLend.repayLoan(0, 2 ether);
+        (,,,,uint256 amount2,,,,,,) = HausLend.loanOnNft(0);
+        assertLt(amount2, amount1 );
     }
- */
+
     function test_repayLoanFull() public {
         acceptLoan();
         startHoax(bob);

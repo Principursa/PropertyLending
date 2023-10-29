@@ -248,8 +248,10 @@ contract LoanProtocol is Ownable(msg.sender) {
             emit LoanPaid(amtPlusInterest, term.borrower);
         }
         if (inputAmount < amtPlusInterest) {
-            term.amount -= inputAmount;
-            term.currency.transferFrom(term.borrower, term.lender, inputAmount);
+            term.amount = term.amount - inputAmount;
+            console.log(term.amount,"term amount");
+            term.currency.transferFrom(term.borrower, address(this), inputAmount);
+            term.currency.approve(term.lender,inputAmount);
             emit LoanAmountDecreased(inputAmount, term.borrower);
         }
     }
