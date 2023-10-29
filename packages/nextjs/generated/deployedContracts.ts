@@ -5,7 +5,7 @@ const contracts = {
       chainId: "31337",
       contracts: {
         WETH: {
-          address: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+          address: "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
           abi: [
             {
               inputs: [
@@ -336,7 +336,7 @@ const contracts = {
           ],
         },
         PropertyNFT: {
-          address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+          address: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
           abi: [
             {
               inputs: [
@@ -811,7 +811,7 @@ const contracts = {
           ],
         },
         MockPropertyOracle: {
-          address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+          address: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
           abi: [
             {
               inputs: [
@@ -844,6 +844,38 @@ const contracts = {
               type: "function",
             },
             {
+              inputs: [],
+              name: "propertyNftContract",
+              outputs: [
+                {
+                  internalType: "contract IERC721",
+                  name: "",
+                  type: "address",
+                },
+              ],
+              stateMutability: "view",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "uint256",
+                  name: "",
+                  type: "uint256",
+                },
+              ],
+              name: "propertyPrices",
+              outputs: [
+                {
+                  internalType: "uint256",
+                  name: "",
+                  type: "uint256",
+                },
+              ],
+              stateMutability: "view",
+              type: "function",
+            },
+            {
               inputs: [
                 {
                   internalType: "uint256",
@@ -864,7 +896,7 @@ const contracts = {
           ],
         },
         MockV3Aggregator: {
-          address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+          address: "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
           abi: [
             {
               inputs: [
@@ -1164,7 +1196,7 @@ const contracts = {
           ],
         },
         LoanProtocol: {
-          address: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+          address: "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
           abi: [
             {
               inputs: [
@@ -1186,6 +1218,11 @@ const contracts = {
               ],
               stateMutability: "nonpayable",
               type: "constructor",
+            },
+            {
+              inputs: [],
+              name: "ContractIsPaused",
+              type: "error",
             },
             {
               inputs: [
@@ -1226,13 +1263,35 @@ const contracts = {
               type: "error",
             },
             {
+              inputs: [],
+              name: "SenderIsNotOwner",
+              type: "error",
+            },
+            {
+              inputs: [],
+              name: "WrongLoanStatus",
+              type: "error",
+            },
+            {
               anonymous: false,
               inputs: [
                 {
                   indexed: false,
                   internalType: "address",
-                  name: "owner",
+                  name: "borrower",
                   type: "address",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "lender",
+                  type: "address",
+                },
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "nftID",
+                  type: "uint256",
                 },
               ],
               name: "Liquidation",
@@ -1240,26 +1299,128 @@ const contracts = {
             },
             {
               anonymous: false,
-              inputs: [],
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "amount",
+                  type: "uint256",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "borrower",
+                  type: "address",
+                },
+              ],
               name: "LoanAmountDecreased",
               type: "event",
             },
             {
               anonymous: false,
-              inputs: [],
-              name: "LoanOffered",
-              type: "event",
-            },
-            {
-              anonymous: false,
-              inputs: [],
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "amount",
+                  type: "uint256",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "borrower",
+                  type: "address",
+                },
+              ],
               name: "LoanPaid",
               type: "event",
             },
             {
               anonymous: false,
-              inputs: [],
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "offerId",
+                  type: "uint256",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "lender",
+                  type: "address",
+                },
+              ],
+              name: "LoanProposed",
+              type: "event",
+            },
+            {
+              anonymous: false,
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "offerId",
+                  type: "uint256",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "lender",
+                  type: "address",
+                },
+              ],
+              name: "LoanRevoked",
+              type: "event",
+            },
+            {
+              anonymous: false,
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "loanId",
+                  type: "uint256",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "borrower",
+                  type: "address",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "lender",
+                  type: "address",
+                },
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "duration",
+                  type: "uint256",
+                },
+              ],
               name: "LoanStarted",
+              type: "event",
+            },
+            {
+              anonymous: false,
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "oracle",
+                  type: "address",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "asset",
+                  type: "address",
+                },
+              ],
+              name: "OracleUpdated",
               type: "event",
             },
             {
@@ -1289,13 +1450,39 @@ const contracts = {
             },
             {
               anonymous: false,
-              inputs: [],
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "contractId",
+                  type: "uint256",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "borrower",
+                  type: "address",
+                },
+              ],
               name: "PropertySubmission",
               type: "event",
             },
             {
               anonymous: false,
-              inputs: [],
+              inputs: [
+                {
+                  indexed: false,
+                  internalType: "uint256",
+                  name: "amount",
+                  type: "uint256",
+                },
+                {
+                  indexed: false,
+                  internalType: "address",
+                  name: "lender",
+                  type: "address",
+                },
+              ],
               name: "TimeIncreased",
               type: "event",
             },
@@ -1570,6 +1757,25 @@ const contracts = {
               type: "function",
             },
             {
+              inputs: [
+                {
+                  internalType: "contract IERC20",
+                  name: "",
+                  type: "address",
+                },
+              ],
+              name: "oracles",
+              outputs: [
+                {
+                  internalType: "contract AggregatorV2V3Interface",
+                  name: "",
+                  type: "address",
+                },
+              ],
+              stateMutability: "view",
+              type: "function",
+            },
+            {
               inputs: [],
               name: "owner",
               outputs: [
@@ -1587,6 +1793,25 @@ const contracts = {
               name: "pause",
               outputs: [],
               stateMutability: "nonpayable",
+              type: "function",
+            },
+            {
+              inputs: [
+                {
+                  internalType: "uint256",
+                  name: "",
+                  type: "uint256",
+                },
+              ],
+              name: "properties",
+              outputs: [
+                {
+                  internalType: "uint256",
+                  name: "",
+                  type: "uint256",
+                },
+              ],
+              stateMutability: "view",
               type: "function",
             },
             {

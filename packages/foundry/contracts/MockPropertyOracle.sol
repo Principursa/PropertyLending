@@ -5,8 +5,8 @@ import "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
 import "./IPropertyOracle.sol";
 
 contract MockPropertyOracle is IPropertyOracle{
-    IERC721 propertyNftContract;
-    mapping (uint256 => uint256) propertyPrices;
+    IERC721 public propertyNftContract;
+    mapping (uint256 => uint256) public propertyPrices;
     constructor (IERC721 _propertyNftContract)  {
         propertyNftContract = _propertyNftContract;
 

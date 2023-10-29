@@ -41,6 +41,9 @@ contract DeployScript is ScaffoldETHDeploy {
             escrow,propertyOracle,propertyNFT
             //vm.addr(deployerPrivateKey)
         ); 
+        
+        propertyOracle.updatePropertyPrice(0, 1000000);
+        hausLoan.updateOracles(weth, priceOracle);
         console.logString(
             string.concat(
                 "HausLoan deployed at: ",
