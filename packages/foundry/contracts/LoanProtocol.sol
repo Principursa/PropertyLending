@@ -19,6 +19,8 @@ contract LoanProtocol is Ownable(msg.sender){
     //@ERRORS
 
     error NotOfferedToProperty(uint propertyId, uint loanOffer );
+    error WrongLoanStatus();
+    error ContractIsPaused();
     //@EVENTS
 
     event PropertySubmission();
@@ -31,7 +33,7 @@ contract LoanProtocol is Ownable(msg.sender){
     event TimeIncreased();
     event LoanAmountDecreased();
 
-    bool public isPaused = true;
+    bool public isPaused = false;
     uint public listedProperties;
     uint public listedOffers;
     IERC721 public propertyNFTContract;
@@ -70,7 +72,7 @@ contract LoanProtocol is Ownable(msg.sender){
     }
     //TODO: implement signature mechanisms
     mapping (uint => LoanOffer) public openLoans;
-    mapping (uint => LoanTerms) loanOnNft;
+    mapping (uint => LoanTerms) public loanOnNft;
     mapping (IERC20 => AggregatorV2V3Interface) oracles;
     mapping (uint=>uint) properties;
     address public escrowAddress;
@@ -84,7 +86,9 @@ contract LoanProtocol is Ownable(msg.sender){
     }
 
     modifier isNotPaused() {
-        require(isPaused == false);
+        if (isPaused == true) {
+            revert ContractIsPaused();
+        }
         _;
     }
 
@@ -120,11 +124,12 @@ contract LoanProtocol is Ownable(msg.sender){
         offer.valid = false;
 
     }
-    function acceptLoanOffer(uint collateralId, uint offerId, uint amount) external isNotPaused {
+    function acceptLoanOffer( uint offerId, uint amount) external isNotPaused {
         LoanOffer storage offer = openLoans[offerId];
         uint _contractId = offer.contractId;
         require(offer.valid == true);
         require(msg.sender == propertyNFTContract.ownerOf(_contractId));
+        require(offer.lender != msg.sender);
         require(amount <= offer.amountMaximum);
         uint listId = openLoans[offerId].nftID;
         _initiateLoan(offerId,amount);
@@ -153,11 +158,14 @@ contract LoanProtocol is Ownable(msg.sender){
         loanOnNft[openLoans[offerId].nftID] = newTerm;
         openLoans[offerId].valid = false;
 
-        offer.currency.transferFrom(address(this),newTerm.borrower,amount);
+
+        offer.currency.transfer(newTerm.borrower,amount);
         uint256 amountLeftOver = offer.amountMaximum - newTerm.amount;
         if (amountLeftOver > 0) {
-            offer.currency.transferFrom(address(this),offer.lender,amountLeftOver);
+            offer.currency.transfer(offer.lender,amountLeftOver);
         }
+
+        propertyNFTContract.transferFrom(newTerm.borrower,address(this),newTerm.nftID);
     }
 
     function liquidate(uint listId) external isNotPaused returns(bool) {
@@ -184,6 +192,7 @@ contract LoanProtocol is Ownable(msg.sender){
 
     function healthLogic(uint healthFactor, uint assetVaulation,uint collateralPrice) public returns(bool){
         uint minimumCollateral = assetVaulation * healthFactor / 100;
+        console.log(minimumCollateral,"MINIMUM COLLATERAL");
         if (minimumCollateral >= collateralPrice){
             return false;
         }
@@ -193,6 +202,7 @@ contract LoanProtocol is Ownable(msg.sender){
     function _liqLogic(uint listId) internal isNotPaused {
         LoanTerms storage terms = loanOnNft[listId];
         //propertyNFTContract.approve(terms.lender,terms.nftID);
+        terms.status = LoanStatus.LIQUIDATED;
         propertyNFTContract.transferFrom(address(this),terms.lender,terms.nftID);
 
     }

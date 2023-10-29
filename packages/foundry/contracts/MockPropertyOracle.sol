@@ -7,7 +7,7 @@ import "./IPropertyOracle.sol";
 contract MockPropertyOracle is IPropertyOracle{
     IERC721 propertyNftContract;
     mapping (uint256 => uint256) propertyPrices;
-    constructor (IERC721 _propertyNftContract) public {
+    constructor (IERC721 _propertyNftContract)  {
         propertyNftContract = _propertyNftContract;
 
     }

@@ -6,6 +6,8 @@ import "../contracts/MockPropertyOracle.sol";
 import "../contracts/LoanProtocol.sol";
 import "../contracts/MockPriceOracle/MockV3Aggregator.sol";
 import "../contracts/MockPriceOracle/MockLinkToken.sol";
+import "../contracts/PropertyNFT.sol";
+import "../contracts/WETH.sol";
 import "openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
 import "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
@@ -28,33 +30,6 @@ contract HausLendTest is Test {
         ONGOING, LIQUIDATED,PAID
     }
 
-   struct LoanTerms {
-        uint interestRate;
-        uint duration;
-        uint start;
-        address borrower;
-        uint amount;
-        uint nftID;
-        IERC20 currency;
-        address lender;
-        uint contractId;
-        uint minimumHealthFactor;
-        LoanStatus status;
-
-    }
-    struct LoanOffer {
-        uint interestRate;
-        uint duration;
-        address lender;
-        uint nftID; //id of the nft on the loan contract
-        uint amountMaximum;
-        IERC20 currency;
-        uint minimumHealthFactor;
-        uint contractId; //id of the nft on the nft contract
-        bool valid;
-
-    }
-
     function setUp() public {
         weth = new WETH();
         propertyNFT = new PropertyNFT();
@@ -63,7 +38,6 @@ contract HausLendTest is Test {
         HausLend = new LoanProtocol(escrow, propertyOracle, propertyNFT);
         weth.mint(alice, 1000 ether);
         propertyNFT.mint(bob, 0);
-        HausLend.unpause();
 
         updateOracles();
     }
@@ -95,6 +69,13 @@ contract HausLendTest is Test {
         HausLend.proposeLoan(offer);
 
     }
+    function acceptLoan() private {
+        proposeLoan();
+        startHoax(bob);
+        propertyNFT.approve(address(HausLend),0);
+        HausLend.acceptLoanOffer(0, 10 ether);
+
+    }
 
     function test_proposeLoan() public {
         proposeLoan();
@@ -108,48 +89,72 @@ contract HausLendTest is Test {
         (,,,,,,,,bool valid) = HausLend.openLoans(0);
         assertEq(valid, false);
     }
+    
+    function test_acceptLoan() public {
+        acceptLoan();
+        (,,,address borrower,,,,,,,) = HausLend.loanOnNft(0);
+        assertEq(borrower, bob);
+    }
 
     function test_expiryLiquidation() public {
+        acceptLoan();
+        skip(2682001);
         startHoax(carlos);
+        HausLend.liquidate(0);
+        (,,,,,,,address lender,,,) = HausLend.loanOnNft(0);
+        assertEq(propertyNFT.ownerOf(0) ,lender);
     }
 
     function test_underCollateralizedLiquidation() public {
+        acceptLoan();
+        propertyOracle.updatePropertyPrice(0, 10);
         startHoax(carlos);
+        (,,,,,,,address lender,,,) = HausLend.loanOnNft(0);
+        HausLend.liquidate(0);
+        assertEq(propertyNFT.ownerOf(0) ,lender);
     }
-
+/*     function test_healthyLoanDoesNotLiquidate() public {
+        acceptLoan();
+        startHoax(carlos);
+        (,,,address borrower,,,,,,,) = HausLend.loanOnNft(0);
+        HausLend.liquidate(0);
+        assertEq(propertyNFT.ownerOf(0) ,borrower);
+    }
+ */
     function test_extendDuration() public {
+        acceptLoan();
         startHoax(alice);
+        HausLend.extendDuration(0, 10000);
+        (,uint duration,,,,,,,,,) = HausLend.loanOnNft(0);
+        assertGt(duration,2682000);
     }
 
-    function test_repayLoanPartial() public {
+/*     function test_repayLoanPartial() public {
+        acceptLoan();
         startHoax(bob);
+        weth.mint(bob,20 ether);
+        weth.approve(address(HausLend), 20 ether);
+        HausLend.repayLoan(0, 20 ether);
+        (,,,,uint256 amount,,,,,,) = HausLend.loanOnNft(0);
+        assertEq(amount, 80 ether);
     }
-
+ */
     function test_repayLoanFull() public {
+        acceptLoan();
         startHoax(bob);
+        weth.mint(bob, 100 ether);
+        weth.approve(address(HausLend),200 ether);
+        HausLend.repayLoan(0,200 ether);
+        (,,,address borrower,,,,,,,) = HausLend.loanOnNft(0);
+        assertEq(borrower,propertyNFT.ownerOf(0));
     }
 
-    function test_acceptLoan() public {
-        startHoax(bob);
-    }
 
     function test_pause() public {}
 
     function updateOracles() private {
         propertyOracle.updatePropertyPrice(0, 10000000);
         HausLend.updateOracles(weth, priceOracle);
-    }
-}
-
-contract WETH is ERC20("Wrapped ETH", "WETH") {
-    function mint(address to, uint256 amount) public {
-        _mint(to, amount);
-    }
-}
-
-contract PropertyNFT is ERC721("PropertyNFt", "PROP") {
-    function mint(address to, uint256 id) public {
-        _mint(to, id);
     }
 }
 

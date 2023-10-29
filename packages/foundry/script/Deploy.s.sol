@@ -3,6 +3,18 @@ pragma solidity ^0.8.19;
 
 import "../contracts/YourContract.sol";
 import "./DeployHelpers.s.sol";
+import "forge-std/Test.sol";
+import "../contracts/MockPropertyOracle.sol";
+import "../contracts/LoanProtocol.sol";
+import "../contracts/MockPriceOracle/MockV3Aggregator.sol";
+import "../contracts/MockPriceOracle/MockLinkToken.sol";
+import "openzeppelin-contracts/contracts/token/ERC721/ERC721.sol";
+import "openzeppelin-contracts/contracts/token/ERC721/IERC721.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "../contracts/PropertyNFT.sol";
+import "../contracts/WETH.sol";
+
 
 contract DeployScript is ScaffoldETHDeploy {
     error InvalidPrivateKey(string);
@@ -15,13 +27,24 @@ contract DeployScript is ScaffoldETHDeploy {
             );
         }
         vm.startBroadcast(deployerPrivateKey);
-        YourContract yourContract = new YourContract(
-            vm.addr(deployerPrivateKey)
+        address escrow = address(3);
+        WETH weth = new WETH(
         );
+         PropertyNFT propertyNFT = new PropertyNFT(
+        );
+        MockPropertyOracle propertyOracle = new MockPropertyOracle(
+            propertyNFT
+        );
+        MockV3Aggregator priceOracle = new MockV3Aggregator(
+            18,1400000000000000000000);
+        LoanProtocol hausLoan = new LoanProtocol(
+            escrow,propertyOracle,propertyNFT
+            //vm.addr(deployerPrivateKey)
+        ); 
         console.logString(
             string.concat(
-                "YourContract deployed at: ",
-                vm.toString(address(yourContract))
+                "HausLoan deployed at: ",
+                vm.toString(address(weth))
             )
         );
         vm.stopBroadcast();
@@ -36,3 +59,4 @@ contract DeployScript is ScaffoldETHDeploy {
 
     function test() public {}
 }
+
